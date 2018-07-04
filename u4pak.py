@@ -305,7 +305,7 @@ class Pak(object):
 
 		return frags
 
-	def print_list(self,details=False,human=False,delim="\n",sort_func=None,out=sys.stdout):
+	def print_list(self,details=False,human=False,delim="\n",sort_func=None,out=sys.stdout,prefix=""):
 		records = self.records
 
 		if sort_func:
@@ -326,19 +326,19 @@ class Pak(object):
 				cmeth = record.compression_method
 
 				if cmeth == COMPR_NONE:
-					out.write("%10u  %10s             -           -  %s  %s%s" % (
-						record.data_offset, size, sha1, record.filename, delim))
+					out.write("%10u  %10s             -           -  %s  %s%s%s%s" % (
+						record.data_offset, size, sha1, prefix, os.path.sep, record.filename, delim))
 				else:
-					out.write("%10u  %10s  %12s  %10s  %s  %s%s" % (
+					out.write("%10u  %10s  %12s  %10s  %s  %s%s%s%s" % (
 						record.data_offset, size, COMPR_METHOD_NAMES[cmeth],
 						size_to_str(record.compressed_size), sha1,
-						record.filename, delim))
+						prefix, os.path.sep, record.filename, delim))
 				count += 1
 				sum_size += record.uncompressed_size
 			out.write("%d file(s) (%s) %s" % (count, size_to_str(sum_size), delim))
 		else:
 			for record in records:
-				out.write("%s%s" % (record.filename, delim))
+				out.write("%s%s%s%s" % (prefix, os.path.sep, record.filename, delim))
 
 	def print_info(self,human=False,out=sys.stdout):
 		if human:
@@ -1581,7 +1581,11 @@ def main(argv):
 	if args.command == 'list':
 		with open(args.archive,"rb") as stream:
 			pak = read_index(stream,args.check_integrity)
-			pak.print_list(args.details,args.human,delim,args.sort_func,sys.stdout)
+			filedir = os.path.dirname(os.path.realpath(args.archive))
+			arbdir = os.path.realpath(os.path.join(filedir,pak.mount_point))
+			outdir = os.path.relpath(arbdir, filedir)
+			normdir = os.path.join(*(p for p in outdir.split(os.path.sep) if p != '..'))
+			pak.print_list(args.details,args.human,delim,args.sort_func,sys.stdout,normdir)
 
 	elif args.command == 'info':
 		with open(args.archive,"rb") as stream:
@@ -1629,10 +1633,14 @@ def main(argv):
 
 		with open(args.archive,"rb") as stream:
 			pak = read_index(stream,args.check_integrity)
+			filedir = os.path.dirname(os.path.realpath(args.archive))
+			arbdir = os.path.realpath(os.path.join(filedir,pak.mount_point))
+			outdir = os.path.join(args.dir, os.path.relpath(arbdir, filedir) + os.path.sep)
+			normdir = os.path.join(*(p for p in outdir.split(os.path.sep) if p != '..'))
 			if args.files:
-				pak.unpack_only(stream,set(name.strip(os.path.sep) for name in args.files),args.dir,callback)
+				pak.unpack_only(stream,set(name.strip(os.path.sep) for name in args.files),normdir,callback)
 			else:
-				pak.unpack(stream,args.dir,callback)
+				pak.unpack(stream,normdir,callback)
 
 	elif args.command == 'pack':
 		if args.verbose:
